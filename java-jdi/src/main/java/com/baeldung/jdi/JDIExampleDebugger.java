@@ -60,7 +60,7 @@ public class JDIExampleDebugger {
     public VirtualMachine connectAndLaunchVM() throws IOException, IllegalConnectorArgumentsException, VMStartException {
         LaunchingConnector launchingConnector = Bootstrap.virtualMachineManager().defaultConnector();
         Map<String, Connector.Argument> arguments = launchingConnector.defaultArguments();
-        arguments.get("main").setValue(debugClass.getName());
+        arguments.get("main").setValue(getDebugClass().getName());
         VirtualMachine vm = launchingConnector.launch(arguments);
         return vm;
     }
@@ -83,7 +83,7 @@ public class JDIExampleDebugger {
      */
     public void setBreakPoints(VirtualMachine vm, ClassPrepareEvent event) throws AbsentInformationException {
         ClassType classType = (ClassType) event.referenceType();
-        for(int lineNumber: breakPointLines) {
+        for(int lineNumber: getBreakPointLines()) {
             Location location = classType.locationsOfLine(lineNumber).get(0);
             BreakpointRequest bpReq = vm.eventRequestManager().createBreakpointRequest(location);
             bpReq.enable();
@@ -114,7 +114,7 @@ public class JDIExampleDebugger {
      */
     public void enableStepRequest(VirtualMachine vm, BreakpointEvent event) {
         //enable step request for last break point
-        if(event.location().toString().contains(debugClass.getName()+":"+breakPointLines[breakPointLines.length-1])) {
+        if(event.location().toString().contains(debugClass.getName()+":"+getBreakPointLines()[getBreakPointLines().length-1])) {
             StepRequest stepRequest = vm.eventRequestManager().createStepRequest(event.thread(), StepRequest.STEP_LINE, StepRequest.STEP_OVER);
             stepRequest.enable();    
         }
