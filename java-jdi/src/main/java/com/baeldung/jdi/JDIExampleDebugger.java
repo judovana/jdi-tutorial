@@ -3,6 +3,7 @@ package com.baeldung.jdi;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.util.List;
 import java.util.Map;
 
 import com.sun.jdi.AbsentInformationException;
@@ -15,6 +16,8 @@ import com.sun.jdi.StackFrame;
 import com.sun.jdi.VMDisconnectedException;
 import com.sun.jdi.Value;
 import com.sun.jdi.VirtualMachine;
+import com.sun.jdi.VirtualMachineManager;
+import com.sun.jdi.connect.AttachingConnector;
 import com.sun.jdi.connect.Connector;
 import com.sun.jdi.connect.IllegalConnectorArgumentsException;
 import com.sun.jdi.connect.LaunchingConnector;
@@ -63,6 +66,27 @@ public class JDIExampleDebugger {
         arguments.get("main").setValue(getDebugClass().getName());
         VirtualMachine vm = launchingConnector.launch(arguments);
         return vm;
+    }
+
+    public VirtualMachine connectToLaunchedPort(int port) throws IOException, IllegalConnectorArgumentsException, VMStartException {
+        VirtualMachineManager vmMgr = Bootstrap.virtualMachineManager();
+        AttachingConnector socketConnector = null;
+        List<AttachingConnector> attachingConnectors = vmMgr.attachingConnectors();
+        for (AttachingConnector ac: attachingConnectors) {
+            if (ac.transport().name().equals("dt_socket")) {
+                socketConnector = ac;
+                break;
+            }
+        }
+        if (socketConnector != null) {
+            Map paramsMap = socketConnector.defaultArguments();
+            Connector.IntegerArgument portArg = (Connector.IntegerArgument)paramsMap.get("port");
+            portArg.setValue(port);
+            VirtualMachine vm = socketConnector.attach(paramsMap);
+            System.out.println("Attached to process '" + vm.name() + "'");
+            return vm;
+        }
+        throw new RuntimeException("No vm found");
     }
 
     /**
@@ -124,12 +148,13 @@ public class JDIExampleDebugger {
 
         JDIExampleDebugger debuggerInstance = new JDIExampleDebugger();
         debuggerInstance.setDebugClass(JDIExampleDebuggee.class);
-        int[] breakPoints = {12, 15};
+        int[] breakPoints = {14, 19};
         debuggerInstance.setBreakPointLines(breakPoints);
         VirtualMachine vm = null;
 
         try {
-            vm = debuggerInstance.connectAndLaunchVM();
+            //vm = debuggerInstance.connectAndLaunchVM();
+            vm = debuggerInstance.connectToLaunchedPort(5005);
             debuggerInstance.enableClassPrepareRequest(vm);
 
             EventSet eventSet = null;
