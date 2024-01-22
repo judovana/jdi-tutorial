@@ -124,7 +124,7 @@ public class JDIExampleDebugger {
 
         JDIExampleDebugger debuggerInstance = new JDIExampleDebugger();
         debuggerInstance.setDebugClass(JDIExampleDebuggee.class);
-        int[] breakPoints = {6, 9};
+        int[] breakPoints = {12, 15};
         debuggerInstance.setBreakPointLines(breakPoints);
         VirtualMachine vm = null;
 
