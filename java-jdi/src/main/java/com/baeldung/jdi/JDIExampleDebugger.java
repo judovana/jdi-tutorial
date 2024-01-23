@@ -1,8 +1,6 @@
 package com.baeldung.jdi;
 
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.util.List;
 import java.util.Map;
 
@@ -12,8 +10,9 @@ import com.sun.jdi.ClassType;
 import com.sun.jdi.IncompatibleThreadStateException;
 import com.sun.jdi.LocalVariable;
 import com.sun.jdi.Location;
+import com.sun.jdi.ReferenceType;
 import com.sun.jdi.StackFrame;
-import com.sun.jdi.VMDisconnectedException;
+import com.sun.jdi.ThreadReference;
 import com.sun.jdi.Value;
 import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.VirtualMachineManager;
@@ -25,11 +24,15 @@ import com.sun.jdi.connect.VMStartException;
 import com.sun.jdi.event.BreakpointEvent;
 import com.sun.jdi.event.ClassPrepareEvent;
 import com.sun.jdi.event.Event;
+import com.sun.jdi.event.EventIterator;
+import com.sun.jdi.event.EventQueue;
 import com.sun.jdi.event.EventSet;
 import com.sun.jdi.event.LocatableEvent;
 import com.sun.jdi.event.StepEvent;
 import com.sun.jdi.request.BreakpointRequest;
 import com.sun.jdi.request.ClassPrepareRequest;
+import com.sun.jdi.request.EventRequest;
+import com.sun.jdi.request.EventRequestManager;
 import com.sun.jdi.request.StepRequest;
 
 public class JDIExampleDebugger {
@@ -68,6 +71,14 @@ public class JDIExampleDebugger {
         return vm;
     }
 
+    /**
+     * thanx to http://wayne-adams.blogspot.com/2011/10/jdi-three-ways-to-attach-to-java.html
+     * @param port
+     * @return
+     * @throws IOException
+     * @throws IllegalConnectorArgumentsException
+     * @throws VMStartException
+     */
     public VirtualMachine connectToLaunchedPort(int port) throws IOException, IllegalConnectorArgumentsException, VMStartException {
         VirtualMachineManager vmMgr = Bootstrap.virtualMachineManager();
         AttachingConnector socketConnector = null;
@@ -129,6 +140,7 @@ public class JDIExampleDebugger {
                 System.out.println(entry.getKey().name() + " = " + entry.getValue());
             }
         }
+        event.request().disable();
     }
 
     /**
@@ -138,7 +150,7 @@ public class JDIExampleDebugger {
      */
     public void enableStepRequest(VirtualMachine vm, BreakpointEvent event) {
         //enable step request for last break point
-        if(event.location().toString().contains(debugClass.getName()+":"+getBreakPointLines()[getBreakPointLines().length-1])) {
+        if (event.location().toString().contains(debugClass.getName() + ":" + getBreakPointLines()[0])) {
             StepRequest stepRequest = vm.eventRequestManager().createStepRequest(event.thread(), StepRequest.STEP_LINE, StepRequest.STEP_OVER);
             stepRequest.enable();    
         }
@@ -152,45 +164,75 @@ public class JDIExampleDebugger {
         debuggerInstance.setBreakPointLines(breakPoints);
         VirtualMachine vm = null;
 
-        try {
-            //vm = debuggerInstance.connectAndLaunchVM();
-            vm = debuggerInstance.connectToLaunchedPort(5005);
-            debuggerInstance.enableClassPrepareRequest(vm);
+        //vm = debuggerInstance.connectAndLaunchVM();
+        //debuggerInstance.enableClassPrepareRequest(vm);
+        //above do not work, the class is not dound:(
 
-            EventSet eventSet = null;
-            while ((eventSet = vm.eventQueue().remove()) != null) {
-                for (Event event : eventSet) {
-                    if (event instanceof ClassPrepareEvent) {
-                        debuggerInstance.setBreakPoints(vm, (ClassPrepareEvent)event);
-                    }
+        vm = debuggerInstance.connectToLaunchedPort(5005);
 
-                    if (event instanceof BreakpointEvent) {
-                        event.request().disable();
-                        debuggerInstance.displayVariables((BreakpointEvent) event);
-                        debuggerInstance.enableStepRequest(vm, (BreakpointEvent)event);
+        int lineNumber = breakPoints[0];
+        List<ReferenceType> refTypes = vm.allClasses();
+        Location breakpointLocation = null;
+        for (ReferenceType refType : refTypes) {
+            if (breakpointLocation != null) {
+                break;
+            }
+            if (JDIExampleDebuggee.class.getName().equals(refType.name())) {
+                List<Location> locs = refType.allLineLocations();
+                for (Location loc : locs) {
+                    if (loc.lineNumber() == lineNumber) {
+                        breakpointLocation = loc;
+                        break;
                     }
-
-                    if (event instanceof StepEvent) {
-                        debuggerInstance.displayVariables((StepEvent) event);
-                    }
-                    vm.resume();
                 }
             }
-        } catch (VMDisconnectedException e) {
-            System.out.println("Virtual Machine is disconnected.");
-        } catch (Exception e) {
-            e.printStackTrace();
-        } 
-        finally {
-            InputStreamReader reader = new InputStreamReader(vm.process().getInputStream());
-            OutputStreamWriter writer = new OutputStreamWriter(System.out);
-            char[] buf = new char[512];
-
-            reader.read(buf);
-            writer.write(buf);
-            writer.flush();
         }
+        if (breakpointLocation != null) {
+            //thanx to http://wayne-adams.blogspot.com/2011/10/generating-minable-event-stream-with.html
+            EventRequestManager evtReqMgr = vm.eventRequestManager();
+            BreakpointRequest bReq = evtReqMgr.createBreakpointRequest(breakpointLocation);
+            bReq.setSuspendPolicy(BreakpointRequest.SUSPEND_ALL);
+            bReq.enable();
+            EventQueue evtQueue = vm.eventQueue();
+            while (true) {
+                EventSet evtSet = evtQueue.remove();
+                EventIterator evtIter = evtSet.eventIterator();
+                while (evtIter.hasNext()) {
+                    try {
+                        Event evt = evtIter.next();
+                        if (evt instanceof BreakpointEvent) {
+                            EventRequest evtReq = evt.request();
+                            if (evtReq instanceof BreakpointRequest) {
+                                BreakpointRequest bpReq = (BreakpointRequest) evtReq;
+                                if (bpReq.location().lineNumber() == lineNumber) {
+                                    System.out.println("Breakpoint at line " + lineNumber + ": ");
+                                    BreakpointEvent brEvt = (BreakpointEvent) evt;
+                                    ThreadReference threadRef = brEvt.thread();
+                                    StackFrame stackFrame = threadRef.frame(0);
+                                    List<LocalVariable> visVars = stackFrame.visibleVariables();
+                                    for (LocalVariable visibleVar : visVars) {
+                                        Value val = stackFrame.getValue(visibleVar);
+                                        String varNameValue = val.toString();
+                                        System.out.println(visibleVar.name() + " = '" + varNameValue + "'");
+                                    }
+                                    debuggerInstance.enableStepRequest(vm, (BreakpointEvent) evt);
+                                }
+                            }
+                        }
+                        if (evt instanceof StepEvent) {
+                            EventRequest evtReq = evt.request();
+                            debuggerInstance.displayVariables((StepEvent) evt);
+                        }
 
+                    } catch (AbsentInformationException aie) {
+                        System.out.println("AbsentInformationException: did you compile your target application with -g option?");
+                    } catch (Exception exc) {
+                        System.out.println(exc.getClass().getName() + ": " + exc.getMessage());
+                    } finally {
+                        evtSet.resume();
+                    }
+                }
+            }
+        }
     }
-
 }
