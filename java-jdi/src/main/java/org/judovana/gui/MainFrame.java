@@ -45,7 +45,7 @@ public class MainFrame extends JFrame {
 
     private void setup() {
         this.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        this.setLayout(new GridLayout(20, 1));
+        this.setLayout(new GridLayout(23, 1));
         this.add(new JLabel("host to connect to"));
         this.add(url);
         this.add(new JLabel("port to connect to"));
@@ -65,6 +65,17 @@ public class MainFrame extends JFrame {
         this.add(exampleLaunch);
         this.add(launch);
         launch.addActionListener(actionEvent -> new ProcessWithOutput().run(getLaunch()));
+        this.add(new JLabel("Debugging:"));
+        this.add(new JButton("attach"));
+        this.add(new JButton("dettach"));
+        this.add(new JButton("add breakpoint"));
+        this.add(new JLabel("when paused:"));
+        this.add(new JButton("step over"));
+        this.add(new JButton("step step in"));
+        this.add(new JButton("resume"));
+        this.add(new JButton("show vars"));
+        this.add(new JButton("show stack"));
+        this.add(new JButton("show threads"));
         this.setSize(800, 600);
         this.setVisible(true);
     }
