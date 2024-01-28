@@ -5,21 +5,25 @@ import com.baeldung.jdi.JDIExampleDebuggee;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.util.Optional;
 
 public class MainFrame extends JFrame {
 
-    private final JTextField url = new JTextField("localhost");
+    private final JTextField host = new JTextField("localhost");
     private final JSpinner port = new JSpinner(new SpinnerNumberModel(5005, 999, 999999, 1));
     private final JTextField example = new JTextField(getHelpString());
     private final JSpinner debugeeTimeout = new JSpinner(new SpinnerNumberModel(100, 1, 1000, 10));
     private final JTextField exampleLaunch = new JTextField(getLaunch());
-    JButton launch = new JButton("Start above process from this gui (rather start it from terminal :)");
+    private final JButton launch = new JButton("Start above process from this gui (rather start it from terminal :)");
+    private final JButton attach = new JButton("attach");
 
     private String getHelpString() {
         return "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:" + port.getValue().toString();
@@ -47,7 +51,7 @@ public class MainFrame extends JFrame {
         this.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         this.setLayout(new GridLayout(23, 1));
         this.add(new JLabel("host to connect to"));
-        this.add(url);
+        this.add(host);
         this.add(new JLabel("port to connect to"));
         this.add(port);
         this.add(new JLabel("target process have to be launch with debug allowed:"));
@@ -66,8 +70,19 @@ public class MainFrame extends JFrame {
         this.add(launch);
         launch.addActionListener(actionEvent -> new ProcessWithOutput().run(getLaunch()));
         this.add(new JLabel("Debugging:"));
-        this.add(new JButton("attach"));
-        this.add(new JButton("dettach"));
+        this.add(attach);
+        attach.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                try {
+                    new AsyncDebuggerController(host.getText(), (int) (port.getValue())).connect();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    JOptionPane.showMessageDialog(null, ex.toString());
+                }
+            }
+        });
+        this.add(new JButton("detach"));
         this.add(new JButton("add breakpoint"));
         this.add(new JLabel("when paused:"));
         this.add(new JButton("step over"));
